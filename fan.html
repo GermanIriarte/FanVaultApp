@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>FanVault - Fan View</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="fanContent"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.2/dist/ethers.umd.min.js"></script>
+  <script>
+    const creators = {
+      fraser: {
+        name: "Mat Fraser",
+        image: "/img/fraser.png",
+        bio: "Campeón de CrossFit. Comparte tips avanzados de entrenamiento.",
+        wallet: "0xA202FCFBAd0B594b19A557E768568A7a38899aF8"
+      },
+      taylor: {
+        name: "Taylor Swift",
+        image: "/img/taylor.png",
+        bio: "Cantante y compositora. Contenido exclusivo de sus giras.",
+        wallet: "0x90d0b2a031f40A3049d276db83172908bf4949D9"
+      },
+      speed: {
+        name: "speed",
+        image: "/img/speed.png",
+        bio: "Streamer. Contenido exclusivo de su vida.",
+        wallet: "0x90d0b2a031f40A3049d276db83172908bf4949D0"
+      }
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const creatorId = params.get('id');
+    const container = document.getElementById('fanContent');
+
+    if (!creators[creatorId]) {
+      container.innerHTML = `<p>❌ Creador no encontrado.</p>`;
+    } else {
+      const creator = creators[creatorId];
+      container.innerHTML = `
+        <h1>${creator.name}</h1>
+        <img src="${creator.image}" alt="${creator.name}" style="width: 200px; border-radius: 12px;" />
+        <p>${creator.bio}</p>
+        <button id="connectWallet">🔗 Conectar Wallet</button>
+        <p id="walletStatus">Wallet no conectada.</p>
+        <div id="requestStatus"></div>
+        <h3>📂 Contenido exclusivo:</h3>
+        <ul id="creatorContent"></ul>
+      `;
+
+      document.getElementById("connectWallet").onclick = async () => {
+        const contractAddress = "0x2cB5E320BBbC3089157C93274fbce05Ab30832bD";
+        const contractABI = [
+          "function getData(string _key) public view returns (string)",
+          "function keyOwner(string _key) public view returns (address)",
+          "function isInWhitelist(address _creator, address _fan) public view returns (bool)",
+         "function getKeysBy(address _creator) public view returns (string[])",
+         "function requestAccessToWhitelist(address _creator) public payable"
+
+        ];
+
+        try {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          await provider.send("eth_requestAccounts", []);
+          const signer = await provider.getSigner();
+          const viewer = await signer.getAddress();
+          document.getElementById("walletStatus").innerText = `✅ Wallet conectada: ${viewer}`;
+
+          const contract = new ethers.Contract(contractAddress, contractABI, signer);
+          const ul = document.getElementById('creatorContent');
+
+          const isWhitelisted = await contract.isInWhitelist(creator.wallet, viewer);
+          const isCreator = viewer.toLowerCase() === creator.wallet.toLowerCase();
+
+          if (!isWhitelisted && !isCreator) {
+            ul.innerHTML = `<li>🔒 No tienes acceso a este contenido.</li>`;
+            
+            const requestDiv = document.getElementById("requestStatus");
+
+            const requestButton = document.createElement("button");
+            requestButton.innerText = "🚪 Solicitar acceso al club";
+            requestButton.onclick = async () => {
+            try {
+                const tx = await contract.requestAccessToWhitelist(creator.wallet, {
+                value: ethers.parseEther("0.001")  // Puedes ajustar el valor
+                });
+                requestDiv.innerHTML = `<p style="color: gray;">⏳ Enviando solicitud...</p>`;
+                await tx.wait();
+                requestDiv.innerHTML = `<p style="color: green;">✅ Solicitud enviada al creador.</p>`;
+            } catch (err) {
+                console.error(err);
+                requestDiv.innerHTML = `<p style="color: red;">❌ Error al enviar la solicitud.</p>`;
+            }
+            };
+
+
+            requestDiv.appendChild(requestButton);
+            return;
+          }
+
+          // Mostrar contenido
+          const keys = await contract.getKeysBy(creator.wallet);
+          for (const key of keys) {
+            const owner = await contract.keyOwner(key);
+            if (owner.toLowerCase() === creator.wallet.toLowerCase()) {
+              const value = await contract.getData(key);
+              const li = document.createElement('li');
+              li.innerHTML = `<strong>${key}</strong>: ${value}`;
+              ul.appendChild(li);
+            }
+          }
+
+        } catch (err) {
+          console.log("❌ Error al conectar o leer contenido:", err);
+          document.getElementById("walletStatus").innerText = "❌ Error al conectar la wallet.";
+        }
+      };
+    }
+  </script>
+</body>
+</html>

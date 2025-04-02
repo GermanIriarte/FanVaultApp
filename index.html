@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FanVault - Guardar contenido exclusivo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>FanVault</h1>
+  <h2>La app de conexión real y exclusiva con tus ídolos.</h2>
+  <p>Conecta tu wallet para guardar y visualizar tu contenido en la blockchain.</p>
+
+  <button id="connectButton">🔗 Conectar Wallet</button>
+  <p id="walletAddress">Wallet no conectada.</p>
+
+  <hr/>
+    <h3>👥 Añadir fan a tu whitelist</h3>
+    <input type="text" id="fanToAdd" placeholder="Dirección del fan" />
+    <button id="addFan">Agregar</button>
+    <p id="whitelistStatus"></p>
+    <section>
+        <h3>🎁 Agregar nuevo contenido exclusivo</h3>
+        <input type="text" id="keyInput" placeholder="Clave (ej: fraser_tip_01)" />
+        <br/>
+        <input type="text" id="valueInput" placeholder="Contenido (ej: haz sentadillas pesadas)" />
+        <br/>
+        <input type="number" id="priceInput" placeholder="Precio en ETH (opcional)" step="0.001" /><br/>
+
+        <button id="saveButton">Guardar en blockchain</button>
+        <p id="status"></p>
+    </section>
+    <h3>📜 Mi Whitelist</h3>
+    <button id="showWhitelist">Ver direcciones</button>
+    <ul id="whitelistList"></ul>
+
+  <hr/>
+
+  <section>
+    <h3>📦 Tus contenidos guardados</h3>
+    <ul id="creatorContentList"></ul>
+    <button id="loadMyContent">Ver mis contenidos</button>
+  </section>
+  <hr/>
+
+<section>
+  <h3>🧾 Whitelists a las que pertenezco</h3>
+  <p>Estas son las comunidades en las que ya tienes acceso para ver contenido exclusivo.</p>
+  <ul id="myWhitelists">
+    <!-- Aquí se cargarán dinámicamente -->
+    <li><em>Próximamente: Contenido en actualizacion</em></li>
+  </ul>
+</section>
+
+<hr/>
+
+<h3>📬 Solicitudes de ingreso a mi whitelist</h3>
+<button id="showRequests">Ver solicitudes</button>
+<ul id="requestList"></ul>
+
+
+<section>
+    <h3>🌍 Explorar clubs de fans disponibles</h3>
+    <p>Descubre ídolos con contenido exclusivo. Conéctate para acceder o desbloquear contenido.</p>
+  
+    <div class="creator-grid">
+      <div class="creator-card">
+        <img src="./img/fraser.png" alt="Mat Fraser" />
+        <h4>Mat Fraser</h4>
+        <p>Tips avanzados de entrenamiento 🏋️‍♂️</p>
+        <button class="ver-btn" data-id="fraser">Ver contenido</button>
+      </div>
+  
+      <div class="creator-card">
+        <img src="./img/taylor.png" alt="Taylor Swift" />
+        <h4>Taylor Swift</h4>
+        <p>Fotos privadas de giras 🎤</p>
+        
+    <button class="ver-btn" data-id="taylor">Ver contenido</button> 
+      </div> 
+  
+      <div class="creator-card">
+        <img src="./img/speed.png" alt="GamerX" />
+        <h4>speed</h4>
+        <p>Setups secretos de rendimiento 🎮</p>
+        <button class="ver-btn" data-id="speed">Ver contenido</button>
+      </div>
+    </div>
+  </section>
+  
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.2/dist/ethers.umd.min.js"></script>
+  <script>
+    const connectButton = document.getElementById('connectButton');
+    const saveButton = document.getElementById('saveButton');
+    const walletAddress = document.getElementById('walletAddress');
+    const status = document.getElementById('status');
+    const contentList = document.getElementById('creatorContentList');
+
+    let signer, contract;
+
+    const contractAddress = "0x2cB5E320BBbC3089157C93274fbce05Ab30832bD";
+
+    const contractABI = [
+  "function storeData(string _key, string _value) public",
+  "function getData(string _key) public view returns (string)",
+  "function keyOwner(string _key) public view returns (address)",
+  "function getMyKeys() public view returns (string[] memory)",
+  "function isInWhitelist(address _creator, address _fan) public view returns (bool)",
+  "function addToMyWhitelist(address _fan) public",
+  "function getMyWhitelist() public view returns (address[])",
+  "function updateData(string _key, string _newValue) public payable",
+  "function setPrice(string _key, uint256 _price) public",
+  "function removeFromMyWhitelist(address _fan) public",
+
+  "function requestAccessToWhitelist(address _creator) public",
+  "function getMyWhitelistRequests() public view returns (address[])",
+  "function approveRequest(address _fan) public"
+
+
+];
+
+    const clavesConocidas = [
+      "fraser_tip_01",
+      "fraser_tip_02",
+      "taylor_photo_01",
+      "diario_gira_mexico"
+    ];
+
+    connectButton.onclick = async () => {
+      if (window.ethereum) {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        walletAddress.innerText = `✅ Conectado: ${address}`;
+        contract = new ethers.Contract(contractAddress, contractABI, signer);
+
+        // Mostrar tips del creador
+        // Mostrar todas las claves creadas por el usuario actual
+        contentList.innerHTML = '';
+        const keys = await contract.getMyKeys();
+        for (const key of keys) {
+        try {
+            const value = await contract.getData(key);
+            const li = document.createElement("li");
+            li.innerHTML = `
+            <strong>${key}</strong>: <span id="value-${key}">${value}</span>
+            <button onclick="editContent('${key}')">✏️ Editar</button>
+            <div id="edit-${key}" style="display:none; margin-top: 5px;">
+                <input type="text" id="input-${key}" placeholder="Nuevo contenido" value="${value}" />
+                <button onclick="saveContent('${key}')">💾 Guardar</button>
+            </div>
+            `;
+ul.appendChild(li);
+
+        } catch (err) {
+            console.log(`Error al obtener ${key}:`, err);
+        }
+        }
+
+      } else {
+        alert("Instala MetaMask para continuar.");
+      }
+    };
+
+    saveButton.onclick = async () => {
+        const key = document.getElementById('keyInput').value;
+        const value = document.getElementById('valueInput').value;
+        const priceEth = document.getElementById('priceInput').value;
+
+        if (!contract || !signer) {
+            status.innerText = "❌ Conecta primero tu wallet.";
+            return;
+        }
+
+        try {
+            const tx = await contract.storeData(key, value);
+            status.innerText = "⏳ Guardando...";
+            await tx.wait();
+            status.innerText = "✅ ¡Contenido guardado!";
+
+            // Si se definió precio, lo seteamos
+            if (priceEth && !isNaN(priceEth)) {
+            const priceWei = ethers.parseEther(priceEth);
+            const setPriceTx = await contract.setPrice(key, priceWei);
+            await setPriceTx.wait();
+            status.innerText += " Precio asignado.";
+            }
+
+        } catch (error) {
+            console.error(error);
+            status.innerText = "❌ Error al guardar. ¿Estás en la whitelist?";
+        }
+};
+
+
+    document.getElementById("addFan").onclick = async () => {
+  const fan = document.getElementById("fanToAdd").value;
+  if (!contract || !signer) {
+    whitelistStatus.innerText = "❌ Conecta tu wallet primero.";
+    return;
+  }
+
+  try {
+    const tx = await contract.addToMyWhitelist(fan);
+    whitelistStatus.innerText = "⏳ Agregando...";
+    await tx.wait();
+    whitelistStatus.innerText = "✅ Fan añadido a tu whitelist.";
+  } catch (err) {
+    console.error(err);
+    whitelistStatus.innerText = "❌ Error al añadir fan.";
+  }
+};
+document.getElementById("showWhitelist").onclick = async () => {
+  const ul = document.getElementById("whitelistList");
+  ul.innerHTML = "";
+  try {
+    const fans = await contract.getMyWhitelist();
+    if (fans.length === 0) {
+      ul.innerHTML = "<li>No tienes fans aún en tu whitelist.</li>";
+    } else {
+        fans.forEach((fan) => {
+        const li = document.createElement("li");
+         li.innerHTML = `
+         ${fan}
+        <button onclick="removeFan('${fan}')">❌ Eliminar</button>`;
+  ul.appendChild(li);
+});
+    }
+  } catch (err) {
+    console.error(err);
+    ul.innerHTML = "<li>Error al obtener tu whitelist.</li>";
+  }
+};
+
+document.getElementById("loadMyContent").onclick = async () => {
+  const ul = document.getElementById("creatorContentList");
+  ul.innerHTML = "";
+  try {
+    const keys = await contract.getMyKeys();
+    if (keys.length === 0) {
+      ul.innerHTML = "<li>No tienes contenidos guardados aún.</li>";
+    } else {
+      for (const key of keys) {
+        try {
+          const value = await contract.getData(key);
+          const li = document.createElement("li");
+          li.innerHTML = `
+            <strong>${key}</strong>: <span id="value-${key}">${value}</span>
+            <button onclick="editContent('${key}')">✏️ Editar</button>
+            <div id="edit-${key}" style="display:none; margin-top: 5px;">
+              <input type="text" id="input-${key}" placeholder="Nuevo contenido" value="${value}" />
+              <button onclick="saveContent('${key}')">💾 Guardar</button>
+            </div>
+          `;
+          ul.appendChild(li);
+        } catch (err) {
+          console.error(`❌ Error al obtener valor de ${key}:`, err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("❌ Error al obtener tus claves:", err);
+    ul.innerHTML = "<li>Error al cargar tus contenidos.</li>";
+  }
+};
+
+
+window.editContent = (key) => {
+  const editDiv = document.getElementById(`edit-${key}`);
+  editDiv.style.display = "block";
+};
+
+window.saveContent = async (key) => {
+  const newValue = document.getElementById(`input-${key}`).value;
+  if (!contract || !signer) {
+    alert("❌ Conecta tu wallet primero.");
+    return;
+  }
+
+  try {
+    const tx = await contract.updateData(key, newValue);
+    await tx.wait();
+    document.getElementById(`value-${key}`).textContent = newValue;
+    document.getElementById(`edit-${key}`).style.display = "none";
+    alert("✅ Contenido actualizado.");
+  } catch (err) {
+    console.error(err);
+    alert("❌ Error al guardar los cambios.");
+  }
+};
+
+
+
+document.querySelectorAll(".ver-btn").forEach((btn) => {
+  btn.onclick = () => {
+    const id = btn.dataset.id;
+    window.location.href = `/fan?id=${id}`;
+  };
+});
+
+window.removeFan = async (fanAddress) => {
+  try {
+    const tx = await contract.removeFromMyWhitelist(fanAddress);
+    await tx.wait();
+    alert(`✅ ${fanAddress} eliminado de tu whitelist.`);
+    document.getElementById("showWhitelist").click(); // refrescar la lista
+  } catch (err) {
+    console.error(err);
+    alert("❌ Error al eliminar al fan.");
+  }
+};
+
+
+document.getElementById("showRequests").onclick = async () => {
+  const ul = document.getElementById("requestList");
+  ul.innerHTML = "";
+  try {
+    const requests = await contract.getMyWhitelistRequests();
+    if (requests.length === 0) {
+      ul.innerHTML = "<li>No tienes solicitudes pendientes.</li>";
+    } else {
+      requests.forEach((fan) => {
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.textContent = "✅ Aceptar";
+        btn.onclick = async () => {
+          const tx = await contract.approveRequest(fan);
+          await tx.wait();
+          alert("✅ Solicitud aprobada.");
+          li.remove();
+        };
+        li.textContent = fan + " ";
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+    }
+  } catch (err) {
+    console.error("Error al obtener solicitudes:", err);
+  }
+};
+
+  </script>
+
+  
+</body>
+</html>
