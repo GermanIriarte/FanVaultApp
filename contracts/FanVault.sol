@@ -54,8 +54,8 @@ function removeFromMyWhitelist(address _fan) public {
     // ========== Guardar datos ==========
     function storeData(string memory _key, string memory _value) public {
         dataVault[_key] = _value;
-        keyOwner[_key] = msg.sender;
-        keysByOwner[msg.sender].push(_key);
+        keyOwner[_key] = msg.sender; //le asociamos esa llave al propietario.
+        keysByOwner[msg.sender].push(_key); //guardamos la clave asociada a un dueño en su arreglo de claves.
     }
 
     // ========== Modificar contenido ==========
@@ -94,7 +94,6 @@ function removeFromMyWhitelist(address _fan) public {
         return keysByOwner[_creator]; // trae las llaves del creador.
     }
 
-    // ✅ Estas funciones deben estar dentro del contrato
 
   function requestAccessToWhitelist(address _creator) public payable {
     address requester = msg.sender;
